@@ -337,7 +337,7 @@
       items.push('<li><span><button type="button" class="link" data-go="' + i + '">' + esc(STEPS[i].t) + '</button></span><span class="badge ' + (ok ? "ok" : "no") + '">' + (ok ? "Completo" : (s.n - s.d) + " pendiente" + (s.n - s.d > 1 ? "s" : "")) + '</span></li>');
     }
     var o = overall();
-    var canDl = downloads !== null;
+    var canDl = true;
     return '<div class="card"><span class="block-tag">Entrega</span><h2>Revisa y descarga tu entrega</h2>' +
       '<p class="lead">' + (o.pct === 100 ? "Todo está completo. Descarga el PDF y súbelo a la tarea de Canvas." : "Puedes descargar ahora, pero revisa lo que falta antes de subirlo a Canvas.") + '</p>' +
       '<ul class="review-list">' + items.join("") + '</ul>' +
@@ -557,7 +557,6 @@
 
   function exportPdf() {
     var btn = document.getElementById("dl");
-    if (!downloads) { showMsg("La descarga directa no está disponible aquí. Usa «Copiar mis respuestas»."); return; }
     var doc;
     try { doc = buildPdf(); }
     catch (e) {
@@ -568,14 +567,25 @@
     }
     var name = "Cuestionario_Foro_Empleo_UFV" + (safeName(S.nombre) ? "_" + safeName(S.nombre) : "") + ".pdf";
     if (btn) btn.disabled = true;
-    downloads.save({ filename: name, data: doc.output("blob") }).then(function () {
-      showMsg("✅ PDF listo. Ahora súbelo a la tarea de Canvas.");
-    }).catch(function (err) {
-      var c = err && err.code;
-      showMsg(c === "declined" ? "Descarga cancelada. Puedes volver a pulsar el botón cuando quieras."
-        : c === "rate_limited" ? "Espera un momento y vuelve a intentarlo."
-        : "No se pudo guardar el archivo. Inténtalo de nuevo.");
-    }).then(function () { if (btn) btn.disabled = false; });
+    try {
+      doc.save(name);
+      showMsg("✅ PDF generado. Si no ves la descarga, revisa la carpeta Descargas. Después súbelo a la tarea de Canvas.");
+    } catch (e) {
+      showMsg("No se pudo guardar el archivo. Inténtalo de nuevo o usa otro navegador.");
+    }
+    // Plan B para navegadores que bloquean la descarga (p. ej. navegadores integrados de apps)
+    try {
+      var url = URL.createObjectURL(doc.output("blob"));
+      var m = document.getElementById("dlmsg");
+      if (m) {
+        var a = document.createElement("a");
+        a.href = url; a.download = name; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = "¿No se descargó? Pulsa aquí para abrir el PDF";
+        a.style.cssText = "display:block;margin-top:8px;font-weight:600";
+        m.appendChild(a);
+      }
+    } catch (e) { /* sin plan B */ }
+    if (btn) btn.disabled = false;
   }
 
   function plainText() {
@@ -606,14 +616,6 @@
   load();
   render();
 
-  try {
-    if (window.claude && typeof window.claude.use === "function") {
-      window.claude.use("downloads").then(function (d) {
-        downloads = d || null;
-        if (step === STEPS.length - 1) render();
-      }, function () { downloads = null; });
-    }
-  } catch (e) { downloads = null; }
 })();
 </script>
 </body>
